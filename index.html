@@ -6,6 +6,7 @@
 <title>نظام إدارة الفرص | Dashboard</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 </head>
 <body>
 
@@ -18,6 +19,7 @@
 <div class="nav-item" data-page="reports-page">التقارير</div>
 </nav>
 </aside>
+<div id="overlay"></div>
 
 <main id="main-content">
 <header>
@@ -27,31 +29,48 @@
 
 <section id="dashboard-page" class="page active">
 <div class="kpi-container">
+
 <div class="card">
 <p>إجمالي الفرص</p>
 <h2 id="total-count">0</h2>
 </div>
+
 <div class="card">
-<p>القيمة التقديرية</p>
+<p> سعر العرض</p>
 <h2 id="total-value">0</h2>
 </div>
+
+
+<div class="card">
+<p>سعر الترسية</p>
+<h2 id="award-total">0</h2>
 </div>
 
-<div class="chart-container card">
-<h3>توزيع الحالات</h3>
-<canvas id="statusChart"></canvas>
 </div>
+
+<div class="charts-row">
+
+    <div class="chart-container card">
+        <h3>نتيجة المنافسة</h3>
+        <canvas id="resultChart"></canvas>
+    </div>
+
+    <div class="chart-container card">
+        <h3>القبول الفني</h3>
+        <canvas id="techChart"></canvas>
+    </div>
+
+</div>
+
 </section>
 
 <section id="reports-page" class="page">
     <div class="filter-section card">
-        <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="بحث  ...">
-        </div>
+        <input type="text" id="searchInput" placeholder="بحث باسم المنافسة أو الجهة...">
         <div class="filter-pills">
-            <button class="filter-btn active" id="btnAll" onclick="resetFilters()">الكل</button>
+            <button id="btnAll" class="filter-btn active">الكل</button>
             <select id="monthFilter">
-                <option value="all">اختر الشهر لفلترة البيانات...</option>
+                <option value="">الأشهر</option>
             </select>
         </div>
     </div>
@@ -63,6 +82,7 @@
         </table>
     </div>
 </section>
+
 </main>
 
 <script src="script.js"></script>
