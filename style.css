@@ -16,7 +16,7 @@ body {
     display: flex;
 }
 
-/* التنسيق الجديد للشريط الجانبي */
+
 #sidebar {
     width: 260px;
     height: 100vh;
@@ -24,15 +24,15 @@ body {
     color: white;
     position: fixed;
     top: 0;
-    right: -260px; /* يبدأ مختفياً خلف حافة الشاشة اليمنى */
-    transition: right 0.3s ease-in-out; /* حركة انزلاق ناعمة */
+    right: -260px; 
+    transition: right 0.3s ease-in-out; 
     z-index: 1000;
-    box-shadow: -5px 0 15px rgba(0,0,0,0.1); /* ظل خفيف لإبرازه عند الظهور */
+    box-shadow: -5px 0 15px rgba(0,0,0,0.1); 
 }
 
-/* الكلاس الذي سيضيفه الـ JavaScript عند الضغط على الزر */
+
 #sidebar.show {
-    right: 0; /* يظهر الشريط بالكامل */
+    right: 0; 
 }
 
 .sidebar-header {
@@ -76,7 +76,7 @@ body {
     transition: margin 0.3s ease;
 }
 
-/* يتحرك فقط عند فتح السايدبار */
+
 #main-content.shift {
     margin-right: 260px;
 }
@@ -131,6 +131,9 @@ td {
     padding: 15px;
     border-bottom: 1px solid #f7f7f7;
 }
+.date-cell {
+    white-space: nowrap;
+}
 
 .status-dropdown {
     padding: 8px;
@@ -168,7 +171,7 @@ td {
     align-items: center;
 }
 
-/* زر الكل المطور */
+
 .filter-btn {
     padding: 10px 25px;
     border-radius: 10px;
@@ -186,35 +189,7 @@ td {
     box-shadow: 0 4px 10px rgba(67, 24, 255, 0.3);
 }
 
-/* زر العين الاحترافي */
-.eye-btn {
-    background: #f4f7fe;
-    border: none;
-    padding: 8px;
-    border-radius: 8px;
-    cursor: pointer;
-    color: #718096;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: 0.2s;
-}
 
-.eye-btn:hover {
-    background: #e2e8f0;
-    color: var(--accent);
-}
-.eye-btn svg {
-    width: 20px;
-    height: 20px;
-    stroke: #718096; /* نفس لون الزر */
-    fill: none;
-    display: block;
-}
-
-.eye-btn:hover svg {
-    stroke: var(--accent); /* يتغير عند hover */
-}
 #monthFilter {
     padding: 10px;
     border-radius: 10px;
@@ -224,34 +199,46 @@ td {
     cursor: pointer;
     min-width: 180px;
 }
+.charts-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
 
-@media (max-width: 768px) {
+.chart-container {
+    flex: 1;
+    min-width: 350px; 
+    height: 400px;    
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    padding: 20px;
+}
 
-    /* الفلتر يصير عمودي */
-    .filter-section {
-        flex-direction: column;
-        align-items: stretch;
-    }
+.chart-container h3 {
+    margin-bottom: 15px;
+    font-size: 1.1rem;
+    align-self: flex-start;
+}
 
-    /* البحث يصير فل عرض */
-    #searchInput {
-        width: 100%;
-    }
 
-    /* الأزرار تحت بعض */
-    .filter-pills {
-        flex-direction: column;
-        align-items: stretch;
-    }
+.chart-container canvas {
+    max-width: 100% !important;
+    max-height: 280px !important; 
+}
+#overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.3);
+    display: none;
+    z-index: 999;
+}
 
-    /* الشارت فل عرض */
-    .chart-container {
-        max-width: 100%;
-    }
-
-    /* تحسين الهيدر */
-    header {
-        flex-direction: row;
-        justify-content: space-between;
-    }
+#overlay.show {
+    display: block;
 }
