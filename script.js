@@ -1,264 +1,430 @@
-const API_URL = "https://script.google.com/macros/s/AKfycby4L4PKEgjPW2iF4rpIEAP5aT9QjFHkkpLhHpU10qACc8ExbkRaHvnsF3WtL44gt82adw/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxTpQZXDU9tFHp7JVlHeWPgm9NzvwIjXYYGAsrZSngeoXxy08IRPIsOj8BOiyvoPChnyg/exec";
 
-// تعيين أماكن الأعمدة بناءً على ملفك
-const MAP = { OPPORTUNITY: 1, ENTITY: 3, DATE: 4, STATUS: 7, VALUE: 9 };
-
+let COL = {};
 let rawData = [];
 let headers = [];
-let hiddenRows = new Set(); 
-let statusChart; // ✅ جديد
 
-document.addEventListener('DOMContentLoaded', () => {
+let resultOptions = [];
+
+let resultChart;
+let techChart;
+let activeFilter = "all";
+let selectedMonth = "";
+
+document.addEventListener("DOMContentLoaded", () => {
     setupNavigation();
     fetchData();
+    generateMonths();
 });
 
+// =========================
+// Fetch Data
+// =========================
 async function fetchData() {
-    try {
-        const response = await fetch(API_URL);
-        const json = await response.json();
+    const res = await fetch(API_URL);
+    const json = await res.json();
 
-        headers = json.headers;
-        rawData = json.data;
+    headers = json.headers;
+    rawData = json.data;
 
-        console.log("HEADERS:", headers);
-        console.log("RAW DATA:", rawData);
+    headers.forEach((h, i) => {
+        COL[String(h).trim()] = i;
+    });
 
-        updateDashboard();
-        renderTable(rawData);
-        populateMonthFilter();
+    resultOptions = [
+        ...new Set(
+            rawData
+                .map(r => r[COL["نتيجة المنافسة"]])
+                .filter(v => v && v !== "غير محدد")
+        )
+    ];
 
-    } catch (error) {
-        console.error("Error fetching data:", error);
-    }
+    updateDashboard();
+    renderTable(rawData);
+    renderResultChart();
+    renderTechChart();
 }
 
-// تنظيف النصوص
-const cleanText = (str) => {
-    if (!str) return "";
-    return String(str).toLowerCase()
-        .replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => "0123456789"["٠١٢٣٤٥٦٧٨٩".indexOf(d)])
-        .replace(/أ|إ|آ/g, "ا").replace(/\\/g, '/').trim();
-};
+// =========================
+// Dashboard
+// =========================
+function updateDashboard() {
 
-// البحث
-document.getElementById('searchInput').addEventListener('input', (e) => {
-    const term = cleanText(e.target.value);
-    const filtered = rawData.filter(row => 
-        row.some(cell => cleanText(cell).includes(term))
-    );
-    renderTable(filtered);
-});
+    const competitionsCount = new Set(
+        rawData
+            .map(r => r[COL["اسم المنافسة"]])
+            .filter(v => v && v.trim() !== "")
+    ).size;
 
-function populateMonthFilter() {
-    const sel = document.getElementById('monthFilter');
-    const options = ["أكتوبر 2025", "نوفمبر 2025", "ديسمبر 2025",
-"يناير 2026", "فبراير 2026", "مارس 2026", "أبريل 2026", "مايو 2026", "يونيو 2026",
-"يوليو 2026", "أغسطس 2026", "سبتمبر 2026", "أكتوبر 2026", "نوفمبر 2026", "ديسمبر 2026"];
-    sel.innerHTML = '<option value="all">الاشهر</option>';
-    options.forEach(m => sel.innerHTML += `<option value="${m}">${m}</option>`);
+    document.getElementById('total-count').innerText = competitionsCount;
 
-    sel.onchange = (e) => {
-        if(e.target.value === "all") { resetFilters(); return; }
-        document.getElementById('btnAll').classList.remove('active');
-        filterDataByMonth(e.target.value);
+    const totalOffer = rawData.reduce((s, r) => {
+        let val = r[COL["سعر العرض"]];
+        val = String(val || "").replace(/,/g, "").trim();
+        return s + (parseFloat(val) || 0);
+    }, 0);
+
+    document.getElementById('total-value').innerText =
+        totalOffer.toLocaleString() + " ر.س";
+
+    const awardTotal = rawData.reduce((s, r) => {
+        let val = r[COL["سعر الترسية"]];
+
+        if (!val) return s;
+
+        val = String(val)
+            .replace(/,/g, "")
+            .replace(/[^\d.]/g, "")
+            .trim();
+
+        return s + (parseFloat(val) || 0);
+    }, 0);
+
+    document.getElementById('award-total').innerText =
+        awardTotal.toLocaleString() + " ر.س";
+}
+
+// =========================
+// Table
+// =========================
+function renderTable(data) {
+
+    document.getElementById('tableHeader').innerHTML = `
+    <tr>
+        <th>اسم المنافسة</th>
+        <th>الجهة</th>
+        <th>تاريخ التقديم</th>
+        <th>تاريخ الترسية</th>
+        <th>نتيجة المنافسة</th>
+        <th>سعر العرض</th>
+    </tr>`;
+
+    document.getElementById('tableBody').innerHTML =
+        data.map((r, i) => `
+        <tr>
+            <td>${r[COL["اسم المنافسة"]] || ""}</td>
+            <td>${r[COL["الجهة المستفيدة"]] || ""}</td>
+            <td class="date-cell">${formatDate(r[COL["تاريخ التقديم"]])}</td>
+            <td class="date-cell">${formatDate(r[COL["تاريخ الترسية"]])}</td>
+
+            <td>
+                <select onchange="updateResult(${i}, this.value)">
+                    ${renderResultOptions(r[COL["نتيجة المنافسة"]])}
+                </select>
+            </td>
+
+            <td>${(parseFloat(r[COL["سعر العرض"]]) || 0).toLocaleString()}</td>
+        </tr>
+    `).join('');
+}
+
+// =========================
+// Dropdown
+// =========================
+function renderResultOptions(selected){
+    return resultOptions.map(v => `
+        <option ${v === selected ? "selected" : ""}>
+            ${v}
+        </option>
+    `).join('');
+}
+
+// =========================
+// Update Result
+// =========================
+async function updateResult(i, val){
+    rawData[i][COL["نتيجة المنافسة"]] = val;
+
+    await fetch(API_URL,{
+        method:"POST",
+        body:JSON.stringify({
+            row:i+2,
+            colName:"نتيجة المنافسة",
+            value:val
+        })
+    });
+
+    renderResultChart();
+    renderTechChart();
+}
+
+// =========================
+// Date format
+// =========================
+function formatDate(d) {
+    if (!d) return "";
+
+    if (typeof d === "number") {
+        const date = new Date(Math.round((d - 25569) * 86400 * 1000));
+        return formatLocalDate(date);
+    }
+
+    const date = new Date(d);
+    if (isNaN(date)) return d;
+
+    return formatLocalDate(date);
+}
+
+function formatLocalDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
+// =========================
+// Result Chart
+// =========================
+function getResultStats() {
+    const stats = {};
+
+    rawData.forEach(r => {
+        let val = r[COL["نتيجة المنافسة"]];
+        if (!val || val === "غير محدد") return;
+        stats[val] = (stats[val] || 0) + 1;
+    });
+
+    return stats;
+}
+
+function renderResultChart() {
+    const stats = getResultStats();
+    const labels = Object.keys(stats);
+    const data = Object.values(stats);
+
+    if (resultChart) resultChart.destroy();
+
+    resultChart = new Chart(document.getElementById('resultChart'), {
+        type: 'pie',
+        data: { labels, datasets: [{ data }] },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12, 
+                        padding: 15,
+                        font: { size: 11 } 
+                    }
+                },
+                datalabels: {
+                    color: '#fff', 
+                    font: { weight: 'bold', size: 12 },
+                    formatter: v => v
+                }
+            }
+        },
+        plugins: [ChartDataLabels]
+    });
+}
+
+function normalizeText(t) {
+    return String(t || "")
+        .trim()
+        .replace(/\s+/g, " ")
+        .replace(/[أإآ]/g, "ا")
+        .replace(/ى/g, "ي");
+}
+
+function getTechStats() {
+
+    let rejectedTech = 0;
+    let acceptedRejectedFinance = 0;
+    let acceptedHigherPrice = 0;
+
+    rawData.forEach(r => {
+
+        const val = normalizeText(r[COL["نتيجة المنافسة"]]);
+
+       
+        if (val.includes("مرفوض فني")) {
+            rejectedTech++;
+        }
+
+       
+        else if (val.includes("مقبول فني") && val.includes("مرفوض")) {
+            acceptedRejectedFinance++;
+        }
+
+      
+        else if (val.includes("مقبول فني") && val.includes("السعر")) {
+            acceptedHigherPrice++;
+        }
+    });
+
+    return {
+        rejectedTech,
+        acceptedRejectedFinance,
+        acceptedHigherPrice
     };
 }
 
-function resetFilters() {
-    document.getElementById('btnAll').classList.add('active');
-    document.getElementById('monthFilter').value = "all";
-    document.getElementById('searchInput').value = "";
-    renderTable(rawData);
+// =========================
+// TECH CHART
+// =========================
+function renderTechChart() {
+    const stats = getTechStats();
+    const dataArr = [stats.rejectedTech, stats.acceptedRejectedFinance, stats.acceptedHigherPrice];
+    const total = dataArr.reduce((a, b) => a + b, 0);
+
+    if (techChart) techChart.destroy();
+
+    techChart = new Chart(document.getElementById('techChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ["مرفوض فني", "مقبول فني مرفوض مالي", "مقبول فني السعر أعلى"],
+            datasets: [{
+                data: dataArr,
+                backgroundColor: ["#ff4d4f", "#faad14", "#52c41a"],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%', 
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 15,
+                        font: { size: 11 }
+                    }
+                },
+                datalabels: {
+                    color: '#000',
+                    font: { weight: 'bold', size: 11 },
+                    formatter: (value) => {
+                        return total ? ((value / total) * 100).toFixed(1) + "%" : "0%";
+                    }
+                }
+            }
+        },
+        plugins: [ChartDataLabels]
+    });
+}
+// =========================
+// Navigation
+// =========================
+function setupNavigation(){
+    const sidebar=document.getElementById('sidebar');
+    const toggle=document.getElementById('toggle-sidebar');
+    const main=document.getElementById('main-content');
+    const overlay=document.getElementById('overlay');
+
+    document.querySelectorAll('.nav-item').forEach(item=>{
+        item.onclick=()=>{
+            document.querySelectorAll('.nav-item,.page').forEach(e=>e.classList.remove('active'));
+            item.classList.add('active');
+            document.getElementById(item.dataset.page).classList.add('active');
+        };
+    });
+
+    function closeSidebar(){
+        sidebar.classList.remove('show');
+        main.classList.remove('shift');
+        overlay.classList.remove('show');
+    }
+
+    toggle.onclick=()=>{
+        sidebar.classList.toggle('show');
+        main.classList.toggle('shift');
+        overlay.classList.toggle('show');
+    };
+
+    overlay.onclick = closeSidebar;
+
+    document.addEventListener("click", (e) => {
+        if (!sidebar.contains(e.target) && !toggle.contains(e.target)) {
+            closeSidebar();
+        }
+    });
 }
 
-function filterDataByMonth(selectedMonth) {
-    const monthsAr = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+// =========================
+// Month Filter Generator
+// =========================
+function generateMonths() {
+    const start = new Date(2025, 9);
+    const end = new Date(2026, 11);
 
-    const filtered = rawData.filter(row => {
-        let cell = row[MAP.DATE];
-        let d;
+    const select = document.getElementById("monthFilter");
 
-        if (cell instanceof Date) {
-            d = cell;
-        } else {
-            let clean = String(cell).replace(/\\/g, '/');
-            let parts = clean.split('/');
+    while (start <= end) {
+        const value = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+        const label = start.toLocaleString("ar", { month: "long", year: "numeric" });
 
-            if (parts.length === 3) {
-                if (parts[0].length === 4) {
-                    d = new Date(parts[0], parts[1] - 1, parts[2]);
-                } else {
-                    d = new Date(parts[2], parts[1] - 1, parts[0]);
-                }
-            } else {
-                d = new Date(clean);
-            }
-        }
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
 
-        if (isNaN(d)) return false;
+        select.appendChild(option);
+        start.setMonth(start.getMonth() + 1);
+    }
+}
 
-        const formatted = `${monthsAr[d.getMonth()]} ${d.getFullYear()}`;
-        return cleanText(formatted) === cleanText(selectedMonth);
-    });
+// =========================
+// Event Listeners (Filters)
+// =========================
+document.getElementById("searchInput").addEventListener("input", applyFilters);
+
+document.getElementById("btnAll").addEventListener("click", () => {
+    activeFilter = "all";
+    document.getElementById("monthFilter").value = "";
+    applyFilters();
+});
+
+document.getElementById("monthFilter").addEventListener("change", (e) => {
+    activeFilter = "month";
+    selectedMonth = e.target.value;
+    applyFilters();
+});
+
+
+// =========================
+// Filters Logic
+// =========================
+
+function applyFilters() {
+    let filtered = [...rawData];
+
+    const search = document.getElementById("searchInput").value.toLowerCase();
+
+    if (search) {
+        filtered = filtered.filter(r =>
+            (r[COL["اسم المنافسة"]] || "").toLowerCase().includes(search) ||
+            (r[COL["الجهة المستفيدة"]] || "").toLowerCase().includes(search)
+        );
+    }
+
+    if (activeFilter === "month" && selectedMonth) {
+        filtered = filtered.filter(r => {
+            const d1 = formatDateToMonth(r[COL["تاريخ التقديم"]]);
+            const d2 = formatDateToMonth(r[COL["تاريخ الترسية"]]);
+
+            return d1 === selectedMonth || d2 === selectedMonth;
+        });
+    }
 
     renderTable(filtered);
 }
 
-function renderTable(data) {
-    const tableBody = document.getElementById('tableBody');
-    document.getElementById('tableHeader').innerHTML = `<tr>
-        <th>${headers[MAP.OPPORTUNITY]}</th><th>${headers[MAP.ENTITY]}</th><th>تاريخ التقديم</th>
-        <th>حالة المنافسة</th><th>سعر العرض</th><th>عرض</th>
-    </tr>`;
-
-    tableBody.innerHTML = data.map((row, index) => {
-        const isHidden = hiddenRows.has(index);
-        const currentStatus = row[MAP.STATUS];
-        return `
-        <tr id="row-${index}">
-            <td>${isHidden ? '**********' : row[MAP.OPPORTUNITY]}</td>
-            <td>${isHidden ? '**********' : row[MAP.ENTITY]}</td>
-            <td>${row[MAP.DATE]}</td>
-            <td>
-                <select class="status-dropdown" onchange="updateStatus(${index}, this.value)">
-                    ${getStatusOptions(currentStatus)}
-                </select>
-            </td>
-            <td>${isHidden ? '**********' : (parseFloat(row[MAP.VALUE]) || 0).toLocaleString()}</td>
-            <td>
-                <button class="eye-btn" onclick="togglePrivacy(${index})">
-                    ${isHidden ? getClosedEyeSVG() : getOpenEyeSVG()}
-                </button>
-            </td>
-        </tr>`;
-    }).join('');
-}
-
-function getStatusOptions(selected) {
-    const statuses = ["قيد التقديم", "تم التقديم", "بانتظار النتيجة", "منتهية", "مرحله الترسية", "تم الإلغاء", "تم اعتماد الترسية", "مرحلة فحص العروض الفنية"];
-    return statuses.map(opt => `<option value="${opt}" ${opt.trim() === String(selected).trim() ? 'selected' : ''}>${opt}</option>`).join('');
-}
-
-function togglePrivacy(index) {
-    hiddenRows.has(index) ? hiddenRows.delete(index) : hiddenRows.add(index);
-    renderTable(rawData);
-}
-
-function getOpenEyeSVG() {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#718096" viewBox="0 0 24 24">
-        <path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/>
-        <circle cx="12" cy="12" r="2.5"/>
-    </svg>`;
-}
-function getClosedEyeSVG() {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="#718096" viewBox="0 0 24 24">
-        <path d="M2 2l20 20"/>
-        <path d="M12 5c-7 0-11 7-11 7a21.8 21.8 0 0 0 5 5"/>
-        <path d="M9.5 9.5a3 3 0 0 0 4 4"/>
-    </svg>`;
-}
 // =========================
-// ✅ الشارت
+// Date Utilities
 // =========================
-function getStatusCounts() {
-    const counts = {};
+function formatDateToMonth(d) {
+    if (!d) return "";
 
-    rawData.forEach(row => {
-        let status = row[MAP.STATUS];
+    let date = new Date(d);
 
-        if (!status || String(status).trim() === "") return;
-
-        counts[status] = (counts[status] || 0) + 1;
-    });
-
-    return counts;
-}
-
-function renderChart() {
-    const canvas = document.getElementById('statusChart');
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    const counts = getStatusCounts();
-
-    const labels = Object.keys(counts);
-    const data = Object.values(counts);
-
-    if (statusChart) statusChart.destroy();
-
-    statusChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{ data }]
-        },
-        options: {
-            plugins: {
-                legend: { position: 'bottom' }
-            }
-        }
-    });
-}
-
-function updateDashboard() {
-    document.getElementById('total-count').innerText = rawData.length;
-    const totalVal = rawData.reduce((sum, row) => sum + (parseFloat(row[MAP.VALUE]) || 0), 0);
-    document.getElementById('total-value').innerText = totalVal.toLocaleString() + " ر.س";
-
-    renderChart(); // ✅
-}
-
-function setupNavigation() {
-    const sidebar = document.getElementById('sidebar');
-    const toggleBtn = document.getElementById('toggle-sidebar');
-    const mainContent = document.getElementById('main-content'); // ✅
-
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', () => {
-            document.querySelectorAll('.nav-item, .page').forEach(el => el.classList.remove('active'));
-            item.classList.add('active');
-            document.getElementById(item.dataset.page).classList.add('active');
-
-            sidebar.classList.remove('show');
-            mainContent.classList.remove('shift'); // ✅
-        });
-    });
-
-    toggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        sidebar.classList.toggle('show');
-        mainContent.classList.toggle('shift'); // ✅
-    });
-
-    document.addEventListener('click', (e) => {
-        if (sidebar.classList.contains('show') && !sidebar.contains(e.target) && e.target !== toggleBtn) {
-            sidebar.classList.remove('show');
-            mainContent.classList.remove('shift'); // ✅
-        }
-    });
-}
-
-async function updateStatus(rowIndex, newValue) {
-    const originalValue = rawData[rowIndex][MAP.STATUS];
-    rawData[rowIndex][MAP.STATUS] = newValue;
-
-    updateDashboard(); // ✅ تحديث مباشر
-
-    try {
-        await fetch(API_URL, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "text/plain" },
-            body: JSON.stringify({
-                row: rowIndex + 2,
-                value: newValue
-            })
-        });
-
-    } catch (error) {
-        rawData[rowIndex][MAP.STATUS] = originalValue;
-        renderTable(rawData);
-        alert("فشل الاتصال");
+    if (typeof d === "number") {
+        date = new Date(Math.round((d - 25569) * 86400 * 1000));
     }
+
+    if (isNaN(date)) return "";
+
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
